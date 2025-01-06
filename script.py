@@ -4,13 +4,11 @@ import math
 
 def ReadInput(input_file):
     input=open(input_file,"r")
-    angtobohr = 0.5291772109
     natoms=0
     z=[]
     i=0
     labels=[]
     charge=0
-
     for index,line in enumerate(input): 
         if index==1:
             natoms=int(line.split()[0]) 
