@@ -15,7 +15,6 @@ def ReadInput(input_file):
             coords=np.zeros((natoms,3))
         if index==3:
             charge=int(line.split()[0])
-        print(natoms)
         if index > 3 and index < (natoms+4):
             aux=line.split()
             atomic_name=aux[0]     #read and store the name of each atom
@@ -203,7 +202,7 @@ def diag_F(F, S_half_inv):
     C = S_half_inv @ eigvecs #Obtaining C - the MO coefficients
     return C, eigvals
 
-def construct_P(C, nb, charge):
+def construct_P(C, nb, z,charge):
     '''
     Update of density matrix using the MO coefficients retrieved from the F diagonalization
     '''
@@ -229,7 +228,7 @@ def electronic_E(P, H, F, nb):
                 E_elec += P[i, j] * (H[i,j] + F[i,j])
     return 0.5 * E_elec
 
-def scf(T, V, S, TEI, nb, charge, max_iterations=100, convergence_threshold=1e-6):
+def scf(T, V, S, TEI, nb, z, charge, max_iterations=100, convergence_threshold=1e-6):
     '''
     SCF procedure
     First H_core, S_orthogonalized and initial P matrix are initialized. 
@@ -246,16 +245,19 @@ def scf(T, V, S, TEI, nb, charge, max_iterations=100, convergence_threshold=1e-6
     So = S_orthogonalized(S)
     P = init_P(nb)
     E_old = 0 #For storing the energy from previous iteration to check convergence
+    iteration_logging = ""
 
     for iteration in range(max_iterations):
         F = construct_F(H, P, TEI, nb)
         C, eigvals = diag_F(F, So)
-        P_new = construct_P(C, nb, charge)
+        P_new = construct_P(C, nb, z, charge)
         E_elec = electronic_E(P_new, H, F, nb)
 
+        iteration_logging += f"Iteration {iteration + 1}: E_elec = {E_elec}\n"
         #print(f"Iteration {iteration + 1}: E_elec = {E_elec}")
 
         if abs(E_elec - E_old) < convergence_threshold:
+            iteration_logging += f"SCF converged after {iteration + 1} iterations\n"
             #print(f"SCF converged after {iteration + 1} iterations")
             break
 
@@ -264,7 +266,7 @@ def scf(T, V, S, TEI, nb, charge, max_iterations=100, convergence_threshold=1e-6
     else:
         print("SCF did not converge")
 
-    return E_elec, P
+    return E_elec, P, iteration_logging
 
 def nuclear_repulsion_energy(z, coords):
     '''
@@ -305,6 +307,20 @@ def energy_decomposition(P, T, V, TEI, z, coords, nb):
 
 #####################################################
 
+def HF_calculation_all(natoms, charge, labels, z, coords):
+    # Building basis and computing 1 and 2 electron integrals
+    angtobohr = 0.5291772109
+    coords_bohr = coords/angtobohr
+    nb, basis = BuildBasis(natoms,z,coords_bohr)
+    S, T, V = cmpt1e(natoms,nb,z,coords_bohr,basis)
+    TEI = cmpt2e(nb,coords_bohr,basis)
+
+    # Main execution
+    E_elec, P, iteration_logging = scf(T, V, S, TEI, nb, z,charge)
+    ET, EV, EJ, EK, ENuc, ETot = energy_decomposition(P, T, V, TEI, z, coords_bohr, nb)
+    
+    return ETot, ET, EV, EJ, EK, ENuc, E_elec, iteration_logging
+
 def HF_calculation(natoms, charge, labels, z, coords):
     # Building basis and computing 1 and 2 electron integrals
     angtobohr = 0.5291772109
@@ -313,123 +329,8 @@ def HF_calculation(natoms, charge, labels, z, coords):
     S, T, V = cmpt1e(natoms,nb,z,coords_bohr,basis)
     TEI = cmpt2e(nb,coords_bohr,basis)
 
-
     # Main execution
-    E_elec, P = scf(T, V, S, TEI, nb, charge)
+    E_elec, P, iteration_logging = scf(T, V, S, TEI, nb, z,charge)
     ET, EV, EJ, EK, ENuc, ETot = energy_decomposition(P, T, V, TEI, z, coords_bohr, nb)
-
-    #print("###########")
-    #print("E_elec:", E_elec, "\n-----------")
-    #print("ET:", ET, "\nEV:", EV, "\nEJ:", EJ, "\nEK:", EK, "\nENuc:", ENuc, "\nE_Elec + ENuc:", E_elec + ENuc, "\n>>> E(RHF):", ETot," <<<")
+    
     return ETot
-
-
-def find_minimum(natoms, charge, labels, z, coords, step=0.0001):
-    # first part => finding energies going up
-    ETot = HF_calculation(natoms, charge, labels, z, coords)
-    bonding_length_ini = coords[1,2]
-    coords_up = np.copy(coords)
-    coords_down = np.copy(coords)
-    coords_up[1,2] = coords[1,2] + step
-    coords_down[1,2] = coords[1,2] - step
-    ETot_new_up = HF_calculation(natoms, charge, labels, z, coords_up)
-    ETot_new_down = HF_calculation(natoms, charge, labels, z, coords_down)
-    if (ETot_new_up > ETot and ETot_new_down < ETot):
-        minimum = False
-        while minimum == False:
-            coords_down = coords
-            coords_down[1,2] = coords[1,2] - step
-            ETot_new_down = HF_calculation(natoms, charge, labels, z, coords_down)
-            if ETot_new_down > ETot:
-                minimum = True
-            coords = coords_down
-        print("minimum has been found on left side") 
-        print(f"Initial bonding length: {bonding_length_ini}")
-        print(f"Optimized bonding length: {coords_down[1,2]}")
-        print(f"Energy: {ETot}")
-    elif (ETot_new_up < ETot and ETot_new_down > ETot):
-        minimum = False
-        while minimum == False:
-            coords_up = coords
-            coords_up[1,2] = coords[1,2] + step
-            ETot_new_up = HF_calculation(natoms, charge, labels, z, coords_up)
-            if ETot_new_up > ETot:
-                minimum = True
-            coords = coords_up
-        print("minimum has been found on right side") 
-        print(f"Initial bonding length: {bonding_length_ini}")
-        print(f"Optimized bonding length: {coords_up[1,2]}")
-        print(f"Energy: {ETot}")
-    elif (ETot_new_up > ETot and ETot_new_down > ETot):
-        print("we already are in a minimum")   
-    else:
-        print("we are on a maximum")
-    
-    
-def find_minimum_recursive(natoms, charge, labels, z, coords, ETot, step=0.001):
-    steps = [0, step, -step]
-    values = [0,1,2]
-    ETot_copy = np.copy(ETot)
-    for A in values:
-        for B in values:
-            for C in values:
-                coords = np.copy(coords)
-                coords_new = coords
-                
-                coords_new[1,0] = coords[1,0] + steps[A]
-                coords_new[2,0] = coords[2,0] + steps[B]
-                coords_new[2,1] = coords[2,1] + steps[C]
-                global counter
-                global results
-                counter += 1
-                print(counter)
-                if (counter > 500):
-                    print("check2")
-                    break
-                ETot_new = HF_calculation(natoms, charge, labels, z, coords_new)
-                
-                
-                print(counter)
-                if (counter > 500):
-                    print("check2")
-                    break
-                if(ETot_new < ETot_copy):
-                    find_minimum_recursive(natoms, charge, labels, z, coords_new, ETot_new)
-                else:
-                    if(results[1] > ETot_copy):
-                        results = (coords_new, ETot_copy)
-                        print("lowest energy till this point")
-                        print(results[1])
-                        print(results[0])
-                        counter = 0
-                
-
-
-
-def find_minimum2(natoms, charge, labels, z, coords):
-    ETot = HF_calculation(natoms, charge, labels, z, coords)
-    global results
-    global counter
-    counter = 0
-    results = [coords, ETot]
-    find_minimum_recursive(natoms, charge, labels, z, coords, ETot, step=0.001)
-    print("results")
-    print(results[0])
-
-
-
-
-                
-
-
-# Reading input
-natoms, charge, labels, z, coords = ReadInput('h3+.input')
-
-print(coords)
-results = []
-find_minimum2(natoms, charge, labels, z, coords)
-
-
-#HF_calculation(natoms, charge, labels, z, coords)
-
-
