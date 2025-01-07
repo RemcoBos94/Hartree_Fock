@@ -6,6 +6,8 @@ def Optimize_bond_length(natoms, charge, labels, z, coords, step=0.001):
     # first part => finding energies going up
     ETot = hf.HF_calculation(natoms, charge, labels, z, coords)
     bonding_length_ini = coords[1,2]
+    print("#################################################")
+    print(f"For bond length {bonding_length_ini} the Total energy is {ETot}")
     coords_up = np.copy(coords)
     coords_down = np.copy(coords)
     coords_up[1,2] = coords[1,2] + step
@@ -15,30 +17,40 @@ def Optimize_bond_length(natoms, charge, labels, z, coords, step=0.001):
     if (ETot_new_up > ETot and ETot_new_down < ETot):
         minimum = False
         while minimum == False:
-            coords_down = coords
+            coords_down = np.copy(coords)
             coords_down[1,2] = coords[1,2] - step
             ETot_new_down = hf.HF_calculation(natoms, charge, labels, z, coords_down)
+            print(coords_down)
+            print(ETot)
+            print(ETot_new_down)
             if ETot_new_down > ETot:
                 minimum = True
-            coords = coords_down
+            else:
+                coords = coords_down
+                ETot = ETot_new_down
         print("#################################################")
         print("Minimum has been found lower than initial bond length") 
         print(f"Initial bonding length: {bonding_length_ini}")
-        print(f"Optimized bonding length: {coords_down[1,2]}")
+        print(f"Optimized bonding length: {coords[1,2]}")
         print(f"Energy: {ETot}")
     elif (ETot_new_up < ETot and ETot_new_down > ETot):
         minimum = False
         while minimum == False:
-            coords_up = coords
+            coords_up = np.copy(coords)
             coords_up[1,2] = coords[1,2] + step
             ETot_new_up = hf.HF_calculation(natoms, charge, labels, z, coords_up)
+            print(coords_up)
+            print(ETot)
+            print(ETot_new_up)
             if ETot_new_up > ETot:
                 minimum = True
-            coords = coords_up
+            else:
+                coords = coords_up
+                ETot = ETot_new_up
         print("#################################################")
         print("Minimum has been found higher than initial bond length") 
         print(f"Initial bonding length: {bonding_length_ini}")
-        print(f"Optimized bonding length: {coords_up[1,2]}")
+        print(f"Optimized bonding length: {coords[1,2]}")
         print(f"Energy: {ETot}")
     elif (ETot_new_up > ETot and ETot_new_down > ETot):
         print("we already are in a minimum")   
