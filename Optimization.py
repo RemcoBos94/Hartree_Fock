@@ -20,9 +20,6 @@ def Optimize_bond_length(natoms, charge, labels, z, coords, step=0.001):
             coords_down = np.copy(coords)
             coords_down[1,2] = coords[1,2] - step
             ETot_new_down = hf.HF_calculation(natoms, charge, labels, z, coords_down)
-            print(coords_down)
-            print(ETot)
-            print(ETot_new_down)
             if ETot_new_down > ETot:
                 minimum = True
             else:
@@ -39,9 +36,6 @@ def Optimize_bond_length(natoms, charge, labels, z, coords, step=0.001):
             coords_up = np.copy(coords)
             coords_up[1,2] = coords[1,2] + step
             ETot_new_up = hf.HF_calculation(natoms, charge, labels, z, coords_up)
-            print(coords_up)
-            print(ETot)
-            print(ETot_new_up)
             if ETot_new_up > ETot:
                 minimum = True
             else:
